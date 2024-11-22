@@ -15,9 +15,13 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/project_creater.git
+git clone https://github.com/redknox/project_creater.git
 cd project_creater
 
+# 或者直接通过pip安装
+pip install git+https://github.com/redknox/project_creater.git
+
+# 如果你想要开发此项目，可以按照以下步骤操作：
 # 创建虚拟环境
 python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
@@ -121,6 +125,17 @@ pylint main.py
 ## 贡献
 
 欢迎提交Issue和Pull Request！
+
+1. Fork 这个仓库
+2. 创建你的特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交你的修改 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 打开一个 Pull Request
+
+你也可以通过以下方式贡献：
+- 报告Bug：https://github.com/redknox/project_creater/issues
+- 提出新功能：https://github.com/redknox/project_creater/issues
+- 完善文档：直接提交PR
 
 ## 许可证
 
