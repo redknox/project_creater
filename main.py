@@ -19,7 +19,9 @@ class ProjectInfo:
         self.license = "MIT"
         self.use_git = True
         self.use_venv = True
-        self.use_logging = True  
+        self.use_logging = True
+        self.use_config = True
+        self.config_format = "yaml"  # 可选：yaml, json, ini
 
     def get_installed_pythons(self):
         """获取系统中已安装的Python版本"""
@@ -115,6 +117,28 @@ class ProjectInfo:
                 break
             print("错误：请输入 y 或 n")
 
+        # 配置系统
+        while True:
+            config_choice = input("是否需要配置系统？(y/n) [y]: ").strip().lower()
+            if config_choice in ['y', 'n']:
+                self.use_config = (config_choice != 'n')
+                break
+            print("错误：请输入 y 或 n")
+
+        if self.use_config:
+            while True:
+                format_choice = input("选择配置文件格式 (1: YAML, 2: JSON, 3: INI) [1]: ").strip()
+                if not format_choice:
+                    format_choice = "1"
+                if format_choice in ['1', '2', '3']:
+                    self.config_format = {
+                        '1': 'yaml',
+                        '2': 'json',
+                        '3': 'ini'
+                    }[format_choice]
+                    break
+                print("错误：请输入 1、2 或 3")
+
         if self.use_venv:
             python_versions = self.get_installed_pythons()
             if not python_versions:
@@ -149,6 +173,9 @@ class ProjectInfo:
         print(f"使用Git管理: {'是' if self.use_git else '否'}")
         print(f"创建虚拟环境: {'是' if self.use_venv else '否'}")
         print(f"使用日志系统: {'是' if self.use_logging else '否'}")
+        print(f"使用配置系统: {'是' if self.use_config else '否'}")
+        if self.use_config:
+            print(f"配置文件格式: {self.config_format}")
         if self.use_venv:
             print(f"虚拟环境Python版本: {self.venv_python}")
 
@@ -315,6 +342,10 @@ if __name__ == '__main__':
             os.makedirs(utils_dir, exist_ok=True)
             self._create_logging_module(utils_dir)
 
+        # 创建配置系统
+        if self.info.use_config:
+            self._create_config_module()
+
     def _create_logging_module(self, utils_dir):
         """创建日志模块"""
         log_content = '''"""
@@ -402,6 +433,203 @@ if __name__ == '__main__':
             f.write('"""工具模块包"""\n\n')
             f.write('from .log import setup_logger\n\n')
             f.write('__all__ = ["setup_logger"]\n')
+
+    def _create_config_module(self):
+        """创建配置模块"""
+        config_dir = os.path.join(self.project_dir, 'src', self.info.project_name, 'config')
+        os.makedirs(config_dir, exist_ok=True)
+
+        # 创建配置处理模块
+        config_content = '''"""
+配置管理模块，提供统一的配置加载和处理功能。
+
+特性：
+1. 多格式支持 (YAML/JSON/INI)
+2. 分层配置 (默认/环境/本地)
+3. 环境变量支持
+4. 配置验证
+"""
+import os
+import json
+from pathlib import Path
+from typing import Any, Dict, Optional
+from pydantic import BaseModel, Field
+try:
+    import yaml
+except ImportError:
+    yaml = None
+try:
+    import tomli
+except ImportError:
+    tomli = None
+from configparser import ConfigParser
+
+class ConfigError(Exception):
+    """配置相关错误"""
+    pass
+
+class AppConfig(BaseModel):
+    """应用配置模型"""
+    # 在这里定义你的配置项
+    app_name: str = Field(default="", description="应用名称")
+    debug: bool = Field(default=False, description="是否开启调试模式")
+    host: str = Field(default="127.0.0.1", description="服务主机地址")
+    port: int = Field(default=8000, description="服务端口")
+    
+    class Config:
+        extra = "allow"  # 允许额外字段
+
+class ConfigLoader:
+    """配置加载器"""
+    
+    def __init__(self, config_dir: str = "config"):
+        self.config_dir = Path(config_dir)
+        self.config_format = "{}"  # 由具体项目设置
+        self._config: Dict[str, Any] = {}
+        
+    def load_config(self, env: str = None) -> AppConfig:
+        """
+        加载配置
+        
+        Args:
+            env: 环境名称 (development/production)
+        
+        Returns:
+            AppConfig: 配置对象
+        """
+        # 1. 加载默认配置
+        default_config = self._load_file("default")
+        self._config.update(default_config or {})
+        
+        # 2. 加载环境配置
+        if env:
+            env_config = self._load_file(env)
+            self._config.update(env_config or {})
+        
+        # 3. 加载本地配置
+        local_config = self._load_file("local")
+        self._config.update(local_config or {})
+        
+        # 4. 环境变量覆盖
+        self._load_from_env()
+        
+        return AppConfig(**self._config)
+    
+    def _load_file(self, name: str) -> Optional[Dict[str, Any]]:
+        """加载配置文件"""
+        file_path = self.config_dir / f"{name}.{self.config_format}"
+        if not file_path.exists():
+            return None
+            
+        with open(file_path, 'r', encoding='utf-8') as f:
+            if self.config_format == 'yaml':
+                if yaml is None:
+                    raise ConfigError("PyYAML is required for yaml config")
+                return yaml.safe_load(f)
+            elif self.config_format == 'json':
+                return json.load(f)
+            elif self.config_format == 'ini':
+                parser = ConfigParser()
+                parser.read_file(f)
+                return {s: dict(parser.items(s)) for s in parser.sections()}
+            
+        return None
+    
+    def _load_from_env(self):
+        """从环境变量加载配置"""
+        prefix = f"{self.info.project_name.upper()}_"
+        for key, value in os.environ.items():
+            if key.startswith(prefix):
+                config_key = key[len(prefix):].lower()
+                # 处理嵌套键
+                keys = config_key.split('_')
+                current = self._config
+                for k in keys[:-1]:
+                    current = current.setdefault(k, {})
+                current[keys[-1]] = value
+
+# 使用示例
+if __name__ == '__main__':
+    loader = ConfigLoader()
+    loader.config_format = 'yaml'  # 或 'json' 或 'ini'
+    config = loader.load_config(env='development')
+    print(f"应用名称: {config.app_name}")
+    print(f"调试模式: {config.debug}")
+'''
+        
+        # 创建配置模块文件
+        config_file = os.path.join(config_dir, 'config.py')
+        with open(config_file, 'w') as f:
+            f.write(config_content)
+            
+        # 创建配置文件示例
+        self._create_config_examples(config_dir)
+        
+        # 创建config包的__init__.py
+        init_file = os.path.join(config_dir, '__init__.py')
+        with open(init_file, 'w') as f:
+            f.write('"""配置管理包"""\n\n')
+            f.write('from .config import ConfigLoader, AppConfig, ConfigError\n\n')
+            f.write('__all__ = ["ConfigLoader", "AppConfig", "ConfigError"]\n')
+            
+    def _create_config_examples(self, config_dir):
+        """创建配置文件示例"""
+        example_config = {
+            'app_name': self.info.project_name,
+            'debug': True,
+            'host': '127.0.0.1',
+            'port': 8000,
+            'database': {
+                'host': 'localhost',
+                'port': 5432,
+                'name': 'mydb'
+            }
+        }
+        
+        if self.info.config_format == 'yaml':
+            import yaml
+            ext = 'yaml'
+            def write_config(f, data):
+                yaml.safe_dump(data, f, default_flow_style=False)
+        elif self.info.config_format == 'json':
+            ext = 'json'
+            def write_config(f, data):
+                json.dump(data, f, indent=2)
+        else:  # ini
+            ext = 'ini'
+            def write_config(f, data):
+                config = ConfigParser()
+                config['DEFAULT'] = {
+                    'app_name': data['app_name'],
+                    'debug': str(data['debug']),
+                    'host': data['host'],
+                    'port': str(data['port'])
+                }
+                config['database'] = {
+                    'host': data['database']['host'],
+                    'port': str(data['database']['port']),
+                    'name': data['database']['name']
+                }
+                config.write(f)
+        
+        # 创建默认配置
+        with open(os.path.join(config_dir, f'default.{ext}'), 'w') as f:
+            write_config(f, example_config)
+            
+        # 创建环境配置示例
+        example_config['debug'] = False
+        with open(os.path.join(config_dir, f'production.{ext}'), 'w') as f:
+            write_config(f, example_config)
+            
+        # 创建本地配置示例
+        example_config['database']['host'] = 'dev.local'
+        with open(os.path.join(config_dir, f'local.{ext}.example'), 'w') as f:
+            write_config(f, example_config)
+            
+        # 更新 .gitignore
+        gitignore_path = os.path.join(self.project_dir, '.gitignore')
+        with open(gitignore_path, 'a') as f:
+            f.write(f'\n# Local config\nconfig/local.{ext}\n')
 
     def init_git(self):
         """初始化git仓库"""
