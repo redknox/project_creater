@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 import re
 import glob
+import json
 
 class ProjectInfo:
     def __init__(self):
@@ -587,16 +588,22 @@ if __name__ == '__main__':
         }
         
         if self.info.config_format == 'yaml':
-            import yaml
-            ext = 'yaml'
-            def write_config(f, data):
-                yaml.safe_dump(data, f, default_flow_style=False)
-        elif self.info.config_format == 'json':
+            try:
+                import yaml
+                ext = 'yaml'
+                def write_config(f, data):
+                    yaml.safe_dump(data, f, default_flow_style=False)
+            except ImportError:
+                print("警告：未安装PyYAML，将使用JSON格式替代")
+                self.info.config_format = 'json'
+                
+        if self.info.config_format == 'json':
             ext = 'json'
             def write_config(f, data):
                 json.dump(data, f, indent=2)
         else:  # ini
             ext = 'ini'
+            from configparser import ConfigParser
             def write_config(f, data):
                 config = ConfigParser()
                 config['DEFAULT'] = {
