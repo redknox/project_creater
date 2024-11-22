@@ -1,0 +1,11 @@
+{
+  "app_name": "aaa",
+  "debug": false,
+  "host": "127.0.0.1",
+  "port": 8000,
+  "database": {
+    "host": "dev.local",
+    "port": 5432,
+    "name": "mydb"
+  }
+}

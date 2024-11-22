@@ -638,6 +638,227 @@ if __name__ == '__main__':
         with open(gitignore_path, 'a') as f:
             f.write(f'\n# Local config\nconfig/local.{ext}\n')
 
+    def _create_helper_docs(self):
+        """创建帮助文档"""
+        docs_dir = os.path.join(self.project_dir, 'docs')
+        helper_content = f"""# {self.info.project_name} 使用指南
+
+本文档提供了项目中各个功能模块的使用方法和示例。
+
+"""
+        if self.info.use_logging:
+            helper_content += """## 日志系统使用指南
+
+### 1. 基本用法
+
+```python
+from utils.log import setup_logger
+
+# 创建日志记录器
+logger = setup_logger('my_module')
+
+# 使用日志记录器
+logger.debug('调试信息')    # 只会显示在终端
+logger.info('普通信息')     # 同时记录到文件和终端
+logger.warning('警告信息')  # 同时记录到文件和终端
+logger.error('错误信息')    # 同时记录到文件和终端
+```
+
+### 2. 日志配置说明
+
+- 日志文件位置：`logs/{logger_name}.log`
+- 日志文件大小：最大 10MB，超过后自动轮转
+- 保留文件数：最多保留 5 个历史文件
+
+### 3. 日志级别
+
+- 终端输出：DEBUG 及以上级别
+- 文件记录：INFO 及以上级别
+
+### 4. 日志格式
+
+#### 终端输出格式
+```
+时间戳 - 模块名 - 日志级别 - [文件名:行号] - 消息内容
+```
+
+#### 文件记录格式
+```
+时间戳 - 模块名 - 日志级别 - 消息内容
+```
+
+### 5. 最佳实践
+
+- 在模块级别创建日志记录器
+- 使用有意义的日志记录器名称
+- 适当使用不同的日志级别
+- DEBUG：详细的调试信息
+- INFO：重要的程序状态信息
+- WARNING：需要注意但不是错误的情况
+- ERROR：错误信息
+
+### 6. 示例代码
+
+```python
+from utils.log import setup_logger
+
+# 创建模块级别的日志记录器
+logger = setup_logger(__name__)
+
+class MyClass:
+    def __init__(self):
+        logger.debug('初始化 MyClass 实例')
+        
+    def process_data(self, data):
+        logger.info(f'开始处理数据，数据大小：{len(data)}')
+        try:
+            # 处理数据
+            result = self._process(data)
+            logger.debug(f'数据处理结果：{result}')
+            return result
+        except Exception as e:
+            logger.error(f'数据处理失败：{str(e)}')
+            raise
+```
+"""
+
+        if self.info.use_config:
+            helper_content += f"""## 配置系统使用指南
+
+### 1. 基本用法
+
+```python
+from config import ConfigLoader
+
+# 创建配置加载器
+loader = ConfigLoader()
+loader.config_format = '{self.info.config_format}'  # 配置文件格式
+
+# 加载配置
+config = loader.load_config(env='development')  # 或 'production'
+
+# 使用配置
+print(f"应用名称: {{config.app_name}}")
+print(f"调试模式: {{config.debug}}")
+print(f"数据库配置: {{config.database['host']}}")
+```
+
+### 2. 配置文件
+
+项目使用分层配置系统，按以下优先级从高到低加载：
+
+1. 本地配置：`config/local.{self.info.config_format}`（不提交到Git）
+2. 环境配置：`config/production.{self.info.config_format}`
+3. 默认配置：`config/default.{self.info.config_format}`
+
+### 3. 配置格式
+
+使用 {self.info.config_format.upper()} 格式存储配置，示例：
+
+"""
+            if self.info.config_format == 'yaml':
+                helper_content += """```yaml
+app_name: myapp
+debug: true
+host: 127.0.0.1
+port: 8000
+database:
+  host: localhost
+  port: 5432
+  name: mydb
+```
+"""
+            elif self.info.config_format == 'json':
+                helper_content += """```json
+{
+  "app_name": "myapp",
+  "debug": true,
+  "host": "127.0.0.1",
+  "port": 8000,
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "mydb"
+  }
+}
+```
+"""
+            else:  # ini
+                helper_content += """```ini
+[DEFAULT]
+app_name = myapp
+debug = true
+host = 127.0.0.1
+port = 8000
+
+[database]
+host = localhost
+port = 5432
+name = mydb
+```
+"""
+
+            helper_content += """
+### 4. 环境变量支持
+
+可以使用环境变量覆盖配置值，环境变量名格式：`项目名称大写_配置路径`
+
+示例：
+```bash
+# 设置数据库主机
+export MYAPP_DATABASE_HOST=db.example.com
+
+# 设置端口
+export MYAPP_PORT=9000
+```
+
+### 5. 配置验证
+
+使用 Pydantic 进行配置验证，可以在 `config.py` 中的 `AppConfig` 类中定义配置项：
+
+```python
+from pydantic import BaseModel, Field
+
+class AppConfig(BaseModel):
+    app_name: str = Field(default="", description="应用名称")
+    debug: bool = Field(default=False, description="是否开启调试模式")
+    port: int = Field(default=8000, description="服务端口")
+    
+    class Config:
+        extra = "allow"  # 允许额外字段
+```
+
+### 6. 最佳实践
+
+1. 敏感信息（密码、密钥等）使用环境变量或本地配置
+2. 不同环境使用不同的配置文件
+3. 使用类型注解和验证确保配置正确性
+4. 将默认值定义在代码中，而不是配置文件中
+"""
+
+        # 写入帮助文档
+        helper_file = os.path.join(docs_dir, 'helper.md')
+        with open(helper_file, 'w', encoding='utf-8') as f:
+            f.write(helper_content)
+
+    def create_project(self):
+        """创建项目目录结构"""
+        # 创建项目目录
+        self.project_dir = os.path.join(self.info.project_path, self.info.project_name)
+        src_dir = os.path.join(self.project_dir, 'src', self.info.project_name)
+        os.makedirs(src_dir, exist_ok=True)
+        
+        # 创建其他目录
+        os.makedirs(os.path.join(self.project_dir, 'tests'), exist_ok=True)
+        os.makedirs(os.path.join(self.project_dir, 'docs'), exist_ok=True)
+        
+        # 创建基础文件
+        self.create_basic_files()
+        
+        # 创建帮助文档
+        if self.info.use_logging or self.info.use_config:
+            self._create_helper_docs()
+
     def init_git(self):
         """初始化git仓库"""
         if not self.info.use_git:
@@ -727,8 +948,7 @@ Thumbs.db
     def create(self):
         """执行所有项目创建步骤"""
         print(f"\n开始创建项目 '{self.info.project_name}'...")
-        self.create_project_structure()
-        self.create_basic_files()
+        self.create_project()
         self.init_git()
         self.create_venv()
         print(f"\n项目 '{self.info.project_name}' 创建成功！")
