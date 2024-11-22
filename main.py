@@ -15,11 +15,11 @@ class ProjectInfo:
         self.email = ""
         self.description = ""
         self.version = "0.1.0"
-        self.python_version = ">=3.6"
+        self.python_version = ">=3.7"
         self.license = "MIT"
-        self.use_git = False
-        self.use_venv = False
-        self.venv_python = ""
+        self.use_git = True
+        self.use_venv = True
+        self.use_logging = True  
 
     def get_installed_pythons(self):
         """获取系统中已安装的Python版本"""
@@ -87,13 +87,13 @@ class ProjectInfo:
         self.description = input("请输入项目描述: ").strip()
 
         # Python版本
-        python_version = input("请输入所需的Python最低版本 (直接回车使用 3.6): ").strip()
+        python_version = input("请输入所需的Python最低版本 (直接回车使用 3.7): ").strip()
         if python_version:
             self.python_version = f">={python_version}"
 
         # Git管理
         while True:
-            git_choice = input("是否使用Git管理项目? (y/n): ").strip().lower()
+            git_choice = input("是否使用Git管理项目? (y/n) [y]: ").strip().lower()
             if git_choice in ['y', 'n']:
                 self.use_git = (git_choice == 'y')
                 break
@@ -101,9 +101,17 @@ class ProjectInfo:
 
         # 虚拟环境
         while True:
-            venv_choice = input("是否创建虚拟环境? (y/n): ").strip().lower()
+            venv_choice = input("是否创建虚拟环境? (y/n) [y]: ").strip().lower()
             if venv_choice in ['y', 'n']:
                 self.use_venv = (venv_choice == 'y')
+                break
+            print("错误：请输入 y 或 n")
+
+        # 日志系统
+        while True:
+            logging_choice = input("是否需要日志系统？(y/n) [y]: ").strip().lower()
+            if logging_choice in ['y', 'n']:
+                self.use_logging = (logging_choice == 'y')
                 break
             print("错误：请输入 y 或 n")
 
@@ -140,6 +148,7 @@ class ProjectInfo:
         print(f"开源协议: {self.license}")
         print(f"使用Git管理: {'是' if self.use_git else '否'}")
         print(f"创建虚拟环境: {'是' if self.use_venv else '否'}")
+        print(f"使用日志系统: {'是' if self.use_logging else '否'}")
         if self.use_venv:
             print(f"虚拟环境Python版本: {self.venv_python}")
 
@@ -299,6 +308,100 @@ if __name__ == '__main__':
 '''
         with open(os.path.join(self.project_dir, 'tests', 'test_main.py'), 'w') as f:
             f.write(test_content)
+
+        # 创建utils目录和日志模块
+        if self.info.use_logging:
+            utils_dir = os.path.join(self.project_dir, 'src', self.info.project_name, 'utils')
+            os.makedirs(utils_dir, exist_ok=True)
+            self._create_logging_module(utils_dir)
+
+    def _create_logging_module(self, utils_dir):
+        """创建日志模块"""
+        log_content = '''"""
+日志模块，提供统一的日志记录功能。
+
+特性：
+1. 同时输出到文件和终端
+2. 文件日志级别为INFO
+3. 终端日志级别为DEBUG
+4. 终端输出包含详细的模块位置信息
+"""
+import os
+import logging
+from logging.handlers import RotatingFileHandler
+import sys
+
+def setup_logger(name, log_dir='logs'):
+    """
+    设置日志记录器
+    
+    Args:
+        name: 日志记录器名称
+        log_dir: 日志文件存储目录
+    
+    Returns:
+        logger: 配置好的日志记录器
+    """
+    # 创建日志目录
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # 创建logger
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    # 避免重复添加handler
+    if logger.handlers:
+        return logger
+    
+    # 创建文件处理器
+    log_file = os.path.join(log_dir, f'{name}.log')
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    file_handler.setFormatter(file_formatter)
+    
+    # 创建控制台处理器
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    console_handler.setFormatter(console_formatter)
+    
+    # 添加处理器到logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+# 示例用法
+if __name__ == '__main__':
+    logger = setup_logger('test_logger')
+    logger.debug('这是一条调试信息')
+    logger.info('这是一条信息')
+    logger.warning('这是一条警告')
+    logger.error('这是一条错误信息')
+'''
+        
+        # 创建日志模块文件
+        log_file = os.path.join(utils_dir, 'log.py')
+        with open(log_file, 'w') as f:
+            f.write(log_content)
+            
+        # 创建utils包的__init__.py
+        init_file = os.path.join(utils_dir, '__init__.py')
+        with open(init_file, 'w') as f:
+            f.write('"""工具模块包"""\n\n')
+            f.write('from .log import setup_logger\n\n')
+            f.write('__all__ = ["setup_logger"]\n')
 
     def init_git(self):
         """初始化git仓库"""
